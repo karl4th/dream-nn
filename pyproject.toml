@@ -1,5 +1,5 @@
 [project]
-name = "dream-nn"
+name = "dreamnn"
 version = "0.1.0"
 description = "DREAM: Dynamic Recall and Elastic Adaptive Memory — PyTorch CTRNN with surprise-driven plasticity"
 readme = "README.md"

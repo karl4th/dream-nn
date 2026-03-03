@@ -15,7 +15,7 @@ A PyTorch implementation of continuous-time RNN cells with surprise-driven plast
 ## Installation
 
 ```bash
-pip install dream-nn
+pip install dreamnn
 ```
 
 ## Quick Start
