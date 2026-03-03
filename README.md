@@ -220,8 +220,8 @@ MIT License — see [LICENSE](LICENSE) for details.
 ```bibtex
 @software{dream2024,
   title = {DREAM: Dynamic Recall and Elastic Adaptive Memory},
-  author = {DREAM Team},
+  author = {Manifestro Team},
   year = {2024},
-  url = {https://github.com/yourusername/dream-nn}
+  url = {https://github.com/karl4th/dream-nn}
 }
 ```

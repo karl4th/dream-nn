@@ -36,6 +36,7 @@ dream_overfit_test_loss.png
 
 # Notebooks (optional)
 *.ipynb_checkpoints/
-dream_overfit_test.ipynb
+# dream_overfit_test.ipynb
 .DS_Store
 test_overfit_audio.py
+tech_report.md
