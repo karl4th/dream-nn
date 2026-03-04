@@ -641,12 +641,13 @@ wheels = [
 ]
 
 [[package]]
-name = "dream-nn"
-version = "0.1.1"
+name = "dreamnn"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "pytest" },
     { name = "torch" },
 ]
 
@@ -673,6 +674,7 @@ requires-dist = [
     { name = "librosa", marker = "extra == 'audio'", specifier = ">=0.10.0" },
     { name = "matplotlib", marker = "extra == 'audio'", specifier = ">=3.7.0" },
     { name = "numpy", specifier = ">=1.24.0" },
+    { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },

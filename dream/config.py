@@ -101,41 +101,41 @@ class DREAMConfig:
     # =====================================================================
     # Plasticity Parameters
     # =====================================================================
-    forgetting_rate: float = 0.01
+    forgetting_rate: float = 0.005
     """Lambda (λ) - forgetting/decay rate for fast weights"""
-    
-    base_plasticity: float = 0.1
+
+    base_plasticity: float = 0.5
     """Base plasticity coefficient for Hebbian learning"""
-    
+
     # =====================================================================
     # Surprise Parameters
     # =====================================================================
-    base_threshold: float = 0.5
+    base_threshold: float = 0.3
     """Base surprise threshold (τ₀) - controls sensitivity to novelty"""
-    
-    entropy_influence: float = 0.2
+
+    entropy_influence: float = 0.1
     """Alpha (α) - entropy influence on surprise threshold"""
-    
-    surprise_temperature: float = 0.1
+
+    surprise_temperature: float = 0.05
     """Gamma (γ) - surprise temperature/scaling parameter"""
-    
+
     # =====================================================================
     # Smoothing Parameters
     # =====================================================================
-    error_smoothing: float = 0.01
+    error_smoothing: float = 0.05
     """Beta (β) - exponential smoothing for error statistics"""
-    
-    surprise_smoothing: float = 0.01
+
+    surprise_smoothing: float = 0.05
     """Beta_s - exponential smoothing for average surprise"""
-    
+
     # =====================================================================
     # Homeostasis Parameters
     # =====================================================================
     target_norm: float = 2.0
     """Target norm for fast weights (W_target)"""
-    
+
     kappa: float = 0.5
-    """Homeostasis coefficient (κ) for weight normalization"""
+    """Gain modulation coefficient (κ) for B_eff"""
     
     # =====================================================================
     # Sleep Consolidation Parameters
@@ -151,9 +151,9 @@ class DREAMConfig:
     # =====================================================================
     ltc_enabled: bool = True
     """Enable Liquid Time-Constant dynamics"""
-    
-    ltc_tau_sys: float = 10.0
-    """Base system time constant for LTC"""
-    
-    ltc_surprise_scale: float = 10.0
+
+    ltc_tau_sys: float = 5.0
+    """Base system time constant for LTC (lower = faster response)"""
+
+    ltc_surprise_scale: float = 5.0
     """Scaling factor for surprise modulation of tau"""
