@@ -1,6 +1,0 @@
-# Requirements for ReadTheDocs
-sphinx>=7.0.0
-sphinx-rtd-theme>=2.0.0
-sphinx-autodoc-typehints>=1.24.0
-numpy>=1.24.0
-torch>=2.0.0

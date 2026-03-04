@@ -13,6 +13,12 @@ Example
 >>> model = DREAM(input_dim=64, hidden_dim=128, rank=8)
 >>> x = torch.randn(4, 50, 64)  # (batch, time, features)
 >>> output, state = model(x)
+
+ASR Module
+----------
+>>> from dream.asr import DREAMASR, DREAMASRTrainer
+>>> model = DREAMASR(input_dim=80, num_phonemes=72)
+>>> probs, log_probs, _ = model(mel_spec, lengths)
 """
 
 from .config import DREAMConfig
@@ -21,17 +27,21 @@ from .cell import DREAMCell
 from .statistics import RunningStatistics
 from .layer import DREAM, DREAMStack
 
-__version__ = "0.2.0"
+
+
+__version__ = "0.1.0"
 __all__ = [
     # Config & State
     "DREAMConfig",
     "DREAMState",
-    
+
     # Core
     "DREAMCell",
     "RunningStatistics",
-    
+
     # High-level API
     "DREAM",
     "DREAMStack",
+
+
 ]
