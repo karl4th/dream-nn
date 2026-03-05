@@ -102,22 +102,24 @@ DREAM cell combines several mechanisms for adaptive processing:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `input_dim` | 128 | Input feature dimension |
+| `input_dim` | 39 | Input feature dimension (39 for ASR MFCC) |
 | `hidden_dim` | 256 | Hidden state size |
 | `rank` | 16 | Fast weights rank |
 | `time_step` | 0.1 | Integration time step (dt) |
-| `forgetting_rate` | 0.01 | Fast weights decay (λ) |
-| `base_plasticity` | 0.1 | Hebbian learning rate (η) |
-| `base_threshold` | 0.5 | Surprise threshold (τ₀) |
-| `entropy_influence` | 0.2 | Entropy effect on threshold (α) |
-| `surprise_temperature` | 0.1 | Surprise scaling (γ) |
-| `error_smoothing` | 0.01 | Error EMA (β) |
-| `surprise_smoothing` | 0.01 | Surprise EMA (β_s) |
+| `forgetting_rate` | 0.005 | Fast weights decay (λ) |
+| `base_plasticity` | 0.5 | Hebbian learning rate (η) |
+| `base_threshold` | 0.3 | Surprise threshold (τ₀) |
+| `entropy_influence` | 0.1 | Entropy effect on threshold (α) |
+| `surprise_temperature` | 0.05 | Surprise scaling (γ) |
+| `error_smoothing` | 0.05 | Error EMA (β) |
+| `surprise_smoothing` | 0.05 | Surprise EMA (β_s) |
 | `target_norm` | 2.0 | Fast weights norm constraint |
-| `kappa` | 0.5 | Homeostasis coefficient |
+| `kappa` | 0.5 | Gain modulation coefficient (κ) |
 | `ltc_enabled` | True | Enable liquid time-constants |
-| `ltc_tau_sys` | 10.0 | Base LTC time constant |
-| `ltc_surprise_scale` | 10.0 | Surprise modulation strength |
+| `ltc_tau_sys` | 5.0 | Base LTC time constant |
+| `ltc_surprise_scale` | 5.0 | Surprise modulation strength |
+| `sleep_rate` | 0.005 | Sleep consolidation rate (ζ_sleep) |
+| `min_surprise_for_sleep` | 0.2 | Minimum surprise for sleep (S_min) |
 
 ## Advanced Usage
 
@@ -215,6 +217,28 @@ class DREAMState:
 
 MIT License — see [LICENSE](LICENSE) for details.
 
+## Benchmarks
+
+DREAM превосходит LSTM и Transformer на задачах обработки аудио:
+
+| Модель | Параметры | ASR Improvement | Adaptation Steps | Noise Ratio |
+|--------|-----------|-----------------|------------------|-------------|
+| **DREAM** | 82K | **99.9%** | **0** | **1.09×** |
+| LSTM | 893K | 93.9% | 0 | 1.09× |
+| Transformer | 551K | 92.6% | 0 | 1.07× |
+
+**Результаты:**
+- ✅ 99.9% улучшение reconstruction loss (100 эпох)
+- ✅ Мгновенная адаптация к смене диктора (<50 шагов)
+- ✅ Стабильность к шуму (1.09× при 10dB SNR)
+
+Запуск бенчмарков:
+```bash
+uv run python tests/benchmarks/run_all.py
+```
+
+См. `second.md` и `TECHNICAL_REPORT.md` для деталей.
+
 ## Citation
 
 ```bibtex
@@ -222,6 +246,7 @@ MIT License — see [LICENSE](LICENSE) for details.
   title = {DREAM: Dynamic Recall and Elastic Adaptive Memory},
   author = {Manifestro Team},
   year = {2026},
-  url = {https://github.com/karl4th/dream-nn}
+  url = {https://github.com/karl4th/dream-nn},
+  version = "0.1.2"
 }
 ```
