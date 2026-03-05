@@ -29,7 +29,7 @@ from .layer import DREAM, DREAMStack
 
 
 
-__version__ = "0.1.0"
+__version__ = "0.1.2"
 __all__ = [
     # Config & State
     "DREAMConfig",
@@ -42,6 +42,4 @@ __all__ = [
     # High-level API
     "DREAM",
     "DREAMStack",
-
-
 ]
