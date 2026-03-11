@@ -55,7 +55,7 @@ def train_stack(
 
     history = {'loss': [], 'global_surprise': []}
     batch_size = train_data.shape[0]
-    states = model.init_states(batch_size, device=device)
+    states = model.init_states(batch_size, device=device) if hasattr(model, 'init_states') else model.init_state(batch_size, device=device)
 
     print(f"Training {model.__class__.__name__} on {train_data.shape}...")
 
@@ -71,15 +71,23 @@ def train_stack(
             segment = train_data[:, start:end, :].to(device)
 
             # Forward pass
-            if isinstance(model, CoordinatedDREAMStack):
-                recon, states, coord_info = model(segment, states)
-                if 'modulations' in coord_info and coord_info['modulations']:
-                    # Track modulation strength
-                    mod_strengths = [m.mean().item() for m in coord_info['modulations'] if m is not None]
-                    if mod_strengths:
-                        surprises.append(sum(mod_strengths) / len(mod_strengths))
+            if hasattr(model, 'forward_with_global_sleep'):
+                recon, states, coord_info = model.forward_with_global_sleep(segment, states)
+            elif hasattr(model, 'forward') and callable(getattr(model, 'forward')):
+                output = model(segment, states) if hasattr(model, 'init_states') else model(segment)
+                if isinstance(output, tuple):
+                    recon, states = output
+                else:
+                    recon = output
             else:
                 recon, states = model(segment, states)
+
+            # Ensure recon has same shape as segment
+            if recon.shape[-1] != segment.shape[-1]:
+                # Project to input dim
+                if not hasattr(model, 'decoder'):
+                    model.decoder = nn.Linear(recon.shape[-1], segment.shape[-1]).to(device)
+                recon = model.decoder(recon)
 
             loss = criterion(recon, segment)
             loss.backward()
@@ -88,8 +96,12 @@ def train_stack(
             n_segments += 1
 
             # Detach states
-            for i in range(len(states)):
-                states[i] = states[i].detach()
+            if isinstance(states, list):
+                for i in range(len(states)):
+                    if hasattr(states[i], 'detach'):
+                        states[i] = states[i].detach()
+            elif hasattr(states, 'detach'):
+                states = states.detach()
 
         # Gradient clipping
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
