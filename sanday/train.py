@@ -116,24 +116,26 @@ class SandayTrainer:
         
         # Learning rate scheduler with warmup
         self.warmup_epochs = 5
-        self.scheduler = torch.optim.lr_scheduler.SequentialLR(
+        self.base_lr = lr
+        
+        # Warmup scheduler (first 5 epochs)
+        self.warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
             self.optimizer,
-            schedulers=[
-                torch.optim.lr_scheduler.LinearLR(
-                    self.optimizer,
-                    start_factor=0.1,
-                    end_factor=1.0,
-                    total_iters=self.warmup_epochs,
-                ),
-                torch.optim.lr_scheduler.ReduceLROnPlateau(
-                    self.optimizer,
-                    mode='min',
-                    factor=0.5,
-                    patience=5,
-                ),
-            ],
-            milestones=[self.warmup_epochs],
+            start_factor=0.1,
+            end_factor=1.0,
+            total_iters=self.warmup_epochs,
         )
+        
+        # Main scheduler (after warmup)
+        self.main_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer,
+            mode='min',
+            factor=0.5,
+            patience=5,
+        )
+        
+        self.current_scheduler = self.warmup_scheduler
+        self.warmup_done = False
         
         # Training history
         self.history = {
@@ -426,7 +428,14 @@ class SandayTrainer:
             # Validate and log
             if val_loader is not None:
                 val_loss = self.validate(val_loader)
-                self.scheduler.step(val_loss)
+                
+                # Switch scheduler after warmup
+                if epoch + 1 >= self.warmup_epochs and not self.warmup_done:
+                    self.current_scheduler = self.main_scheduler
+                    self.warmup_done = True
+                
+                # Step scheduler
+                self.current_scheduler.step(val_loss)
                 
                 # Log detailed stats
                 self.log_epoch_stats(epoch + 1, val_loader)
@@ -466,7 +475,8 @@ class SandayTrainer:
             print(f"   Train Loss: {train_loss:.4f} ({elapsed:.1f}s)")
             if val_loss is not None:
                 print(f"   Val Loss:   {val_loss:.4f}")
-            print(f"   LR:         {current_lr:.2e}")
+            scheduler_name = "warmup" if epoch < self.warmup_epochs else "plateau"
+            print(f"   LR:         {current_lr:.2e} ({scheduler_name})")
         
         print(f"\n{'='*70}")
         print(f"Training complete!")
