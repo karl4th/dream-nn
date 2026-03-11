@@ -108,13 +108,14 @@ def run_test_4(audio_dir: str, metadata_path: str, hidden_dims: list, epochs: in
     )
 
 
-def run_test_5(hidden_dims: list, seq_len: int, device: str) -> Dict[str, Any]:
-    """Test 5: Hierarchical Processing."""
+def run_test_5(audio_dir: str, metadata_path: str, hidden_dims: list, device: str) -> Dict[str, Any]:
+    """Test 5: Hierarchical Processing (Real Audio)."""
     from test_05_hierarchy import run_hierarchy_test
     return run_hierarchy_test(
+        audio_dir=audio_dir,
+        metadata_path=metadata_path,
         hidden_dims=hidden_dims,
-        n_epochs=50,  # Train for 50 epochs
-        demo=False,  # Standard mode for benchmark
+        n_epochs=50,
         device=device,
     )
 
@@ -168,7 +169,7 @@ def main():
             elif test_num == 4:
                 results = run_test_4(audio_dir, metadata_path, args.hidden_dims, args.epochs, args.device)
             elif test_num == 5:
-                results = run_test_5(args.hidden_dims, args.seq_len, args.device)
+                results = run_test_5(audio_dir, metadata_path, args.hidden_dims, args.device)
 
             elapsed = time.time() - start_time
             print(f"\nTest {test_num} completed in {elapsed:.1f}s")
