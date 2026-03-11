@@ -264,6 +264,8 @@ def main():
     return 0 if all_passed else 1
 
 
+
+
 def generate_visualization(all_results: Dict, output_dir: Path) -> None:
     """
     Generate detailed separate visualizations for each benchmark test.
@@ -808,3 +810,7 @@ def generate_visualization(all_results: Dict, output_dir: Path) -> None:
     
     print(f"\n📊 All visualizations saved to: {output_dir}")
     print(f"   Resolution: 300 DPI (publication quality)")
+
+
+if __name__ == '__main__':
+    main()
