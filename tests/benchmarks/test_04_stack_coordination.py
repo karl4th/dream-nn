@@ -57,6 +57,11 @@ def train_stack(
     batch_size = train_data.shape[0]
     states = model.init_states(batch_size, device=device)
 
+    # Add output projection if not present
+    if not hasattr(model, 'output_projection'):
+        last_hidden_dim = model.hidden_dims[-1] if hasattr(model, 'hidden_dims') else 128
+        model.output_projection = nn.Linear(last_hidden_dim, 80).to(device)
+
     print(f"Training {model.__class__.__name__} on {train_data.shape}...")
 
     for epoch in range(n_epochs):
@@ -76,7 +81,9 @@ def train_stack(
                 loss = losses['reconstruction'] + model.inter_layer_loss_weight * losses['inter_layer']
                 total_inter_loss += losses['inter_layer'].item()
             else:
-                recon, states = model(segment, states, return_all=True)
+                # Uncoordinated: need to project output
+                hidden_output, states = model(segment, states, return_all=True)
+                recon = model.output_projection(hidden_output)
                 loss = criterion(recon, segment)
 
             loss.backward()
