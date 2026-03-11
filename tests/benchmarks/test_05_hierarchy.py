@@ -98,7 +98,8 @@ def measure_layer_adaptation(
             current_input = x_t
 
             for i, layer in enumerate(model.cells):
-                h_new, states.layer_states[i] = layer(current_input, states.layer_states[i])
+                # CoordinatedDREAMCell returns: h_new, state, prediction, modulation
+                h_new, states.layer_states[i], _, _ = layer(current_input, states.layer_states[i])
 
                 # Track surprise
                 if hasattr(states.layer_states[i], 'avg_surprise'):
