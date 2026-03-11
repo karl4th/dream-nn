@@ -113,7 +113,8 @@ def run_test_5(hidden_dims: list, seq_len: int, device: str) -> Dict[str, Any]:
     from test_05_hierarchy import run_hierarchy_test
     return run_hierarchy_test(
         hidden_dims=hidden_dims,
-        seq_len=seq_len,
+        n_epochs=50,  # Train for 50 epochs
+        demo=False,  # Standard mode for benchmark
         device=device,
     )
 
@@ -231,9 +232,11 @@ def main():
 
     if 5 in all_results:
         r5 = all_results[5]
+        # Check hierarchy from new test format
         passed = r5.get('summary', {}).get('hierarchy_present', False)
-        print(f"✓ Test 5 (Hierarchy): {'PASS' if passed else 'FAIL'}")
-        summary['results']['test_5_hierarchy'] = {'passed': passed}
+        tau_ratio = r5.get('summary', {}).get('tau_ratio', 0)
+        print(f"✓ Test 5 (Hierarchy): {'PASS' if passed else 'FAIL'} (tau_ratio={tau_ratio:.2f}x)")
+        summary['results']['test_5_hierarchy'] = {'passed': passed, 'tau_ratio': tau_ratio}
 
     all_passed = all(r.get('passed', False) for r in summary['results'].values())
 
