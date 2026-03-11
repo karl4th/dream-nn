@@ -74,7 +74,12 @@ def train_stack(
             if hasattr(model, 'forward_with_global_sleep'):
                 recon, states, coord_info = model.forward_with_global_sleep(segment, states)
             elif hasattr(model, 'forward') and callable(getattr(model, 'forward')):
-                output = model(segment, states) if hasattr(model, 'init_states') else model(segment)
+                # Try to get return_all=True for sequence output
+                try:
+                    output = model(segment, states, return_all=True) if hasattr(model, 'init_states') else model(segment, return_all=True)
+                except TypeError:
+                    output = model(segment, states) if hasattr(model, 'init_states') else model(segment)
+                    
                 if isinstance(output, tuple):
                     recon, states = output
                 else:
@@ -82,7 +87,12 @@ def train_stack(
             else:
                 recon, states = model(segment, states)
 
-            # Ensure recon has same shape as segment
+            # Ensure recon has same shape as segment (batch, time, input_dim)
+            if len(recon.shape) == 2:
+                # Only last timestep returned, need all timesteps
+                # For now, expand to match
+                recon = recon.unsqueeze(1).expand(-1, segment.shape[1], -1)
+            
             if recon.shape[-1] != segment.shape[-1]:
                 # Project to input dim
                 if not hasattr(model, 'decoder'):
