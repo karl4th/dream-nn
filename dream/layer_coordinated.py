@@ -276,7 +276,8 @@ class CoordinatedDREAMStack(nn.Module):
         dropout: float = 0.1,
         use_hierarchical_tau: bool = True,
         use_inter_layer_prediction: bool = True,
-        inter_layer_loss_weight: float = 0.01  # Reduced from 0.1 to prevent domination
+        inter_layer_loss_weight: float = 0.01,
+        freeze_fast_weights: bool = False,  # NEW: Support for 2-stage training
     ):
         super().__init__()
 
@@ -290,6 +291,7 @@ class CoordinatedDREAMStack(nn.Module):
         self.use_hierarchical_tau = use_hierarchical_tau
         self.use_inter_layer_prediction = use_inter_layer_prediction
         self.inter_layer_loss_weight = inter_layer_loss_weight
+        self.freeze_fast_weights = freeze_fast_weights  # NEW
 
         # Create coordinated cells
         self.cells = nn.ModuleList()
@@ -307,6 +309,8 @@ class CoordinatedDREAMStack(nn.Module):
                 num_layers=self.num_layers,
                 use_hierarchical_tau=use_hierarchical_tau
             )
+            # NEW: Apply freeze_fast_weights to all cells
+            cell.freeze_fast_weights = freeze_fast_weights
             self.cells.append(cell)
 
         # Dropout
@@ -314,6 +318,61 @@ class CoordinatedDREAMStack(nn.Module):
 
         # Output projection (to input dim for reconstruction)
         self.output_projection = nn.Linear(hidden_dims[-1], input_dim)
+
+    # ================================================================
+    # NEW: 2-Stage Training Support
+    # ================================================================
+    
+    def set_fast_weights_mode(self, freeze: bool):
+        """
+        Freeze/unfreeze fast weights in ALL layers.
+        
+        Parameters
+        ----------
+        freeze : bool
+            True  = Stage 1 (pre-training, fast weights frozen)
+            False = Stage 2 (adaptation, fast weights active)
+        """
+        self.freeze_fast_weights = freeze
+        for cell in self.cells:
+            cell.freeze_fast_weights = freeze
+    
+    def train(self, mode: bool = True):
+        """
+        Set training mode and auto-freeze fast weights.
+        
+        Stage 1 (pre-training): model.train() → fast weights FROZEN
+        Stage 2 (adaptation):   model.eval()  → fast weights ACTIVE
+        """
+        super().train(mode)
+        # Auto-freeze fast weights during training (Stage 1)
+        # Unfreeze during eval (Stage 2/Production)
+        self.set_fast_weights_mode(freeze=mode)
+        return self
+    
+    def switch_to_adaptation(self):
+        """
+        Switch from Stage 1 (pre-training) to Stage 2 (adaptation).
+        
+        Call this after pre-training to enable fast weights plasticity.
+        """
+        self.set_fast_weights_mode(freeze=False)
+        self.eval()  # Set to eval mode
+        print(f"[CoordinatedDREAMStack] Switched to ADAPTATION mode")
+        print(f"  - Fast weights: UNFROZEN (active plasticity)")
+        print(f"  - Mode: eval (inference with adaptation)")
+    
+    def switch_to_pretraining(self):
+        """
+        Switch to Stage 1 (pre-training) mode.
+        
+        Call this to freeze fast weights and train slow weights.
+        """
+        self.set_fast_weights_mode(freeze=True)
+        self.train()  # Set to train mode
+        print(f"[CoordinatedDREAMStack] Switched to PRE-TRAINING mode")
+        print(f"  - Fast weights: FROZEN (static base)")
+        print(f"  - Mode: train (slow weights learning)")
 
     def init_states(self, batch_size: int, device: Optional[torch.device] = None) -> CoordinatedState:
         """Initialize states for all layers."""

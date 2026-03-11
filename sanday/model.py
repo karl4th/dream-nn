@@ -48,6 +48,7 @@ class SandayASR(nn.Module):
                  num_phonemes: int = 45,  # 44 phonemes + blank
                  dropout: float = 0.1,
                  use_coordination: bool = True,
+                 freeze_fast_weights: bool = False,  # NEW: For 2-stage training
                  ):
         super().__init__()
         
@@ -59,8 +60,9 @@ class SandayASR(nn.Module):
         self.rank = rank
         self.num_phonemes = num_phonemes
         self.num_layers = len(hidden_dims)
+        self.freeze_fast_weights = freeze_fast_weights  # NEW
         
-        # DREAM encoder
+        # DREAM encoder (NEW: pass freeze_fast_weights)
         self.dream_stack = CoordinatedDREAMStack(
             input_dim=input_dim,
             hidden_dims=hidden_dims,
@@ -69,6 +71,7 @@ class SandayASR(nn.Module):
             use_hierarchical_tau=True,
             use_inter_layer_prediction=use_coordination,
             inter_layer_loss_weight=0.01,
+            freeze_fast_weights=freeze_fast_weights,  # NEW
         )
         
         # CTC projection head
@@ -82,10 +85,54 @@ class SandayASR(nn.Module):
         nn.init.xavier_uniform_(self.ctc_head.weight)
         nn.init.zeros_(self.ctc_head.bias)
     
+    # ================================================================
+    # 2-Stage Training Support
+    # ================================================================
+    
+    def switch_to_pretraining(self, use_mse: bool = True):
+        """
+        Stage 1: Pre-training with frozen fast weights.
+        
+        Use reconstruction loss (MSE) to train slow weights.
+        """
+        self.dream_stack.switch_to_pretraining()
+        
+        # For Stage 1, use reconstruction loss
+        if use_mse:
+            self.reconstruction_head = nn.Linear(
+                self.hidden_dims[-1],
+                self.input_dim
+            ).to(next(self.parameters()).device)
+        
+        print(f"[SandayASR] Stage 1: PRE-TRAINING")
+        print(f"  - Fast weights: FROZEN")
+        print(f"  - Loss: Reconstruction (MSE)")
+    
+    def switch_to_adaptation(self):
+        """
+        Stage 2: Adaptation training with active fast weights.
+        
+        Use CTC loss for phoneme recognition.
+        """
+        self.dream_stack.switch_to_adaptation()
+        
+        # Remove reconstruction head if exists
+        if hasattr(self, 'reconstruction_head'):
+            del self.reconstruction_head
+        
+        print(f"[SandayASR] Stage 2: ADAPTATION")
+        print(f"  - Fast weights: ACTIVE")
+        print(f"  - Loss: CTC (phoneme recognition)")
+    
+    def is_pretraining(self) -> bool:
+        """Check if in pre-training mode."""
+        return self.dream_stack.freeze_fast_weights
+    
     def forward(self,
                 x: torch.Tensor,
                 lengths: Optional[torch.Tensor] = None,
                 return_states: bool = False,
+                stage: str = 'adaptation',  # NEW: 'pretrain' or 'adaptation'
                 ) -> Dict[str, torch.Tensor]:
         """
         Forward pass.
@@ -98,14 +145,17 @@ class SandayASR(nn.Module):
             Sequence lengths (batch,)
         return_states : bool
             If True, return DREAM states for hierarchy analysis
+        stage : str
+            'pretrain' → return reconstruction
+            'adaptation' → return CTC logits
         
         Returns
         -------
         outputs : Dict[str, torch.Tensor]
             Dictionary with:
-            - 'ctc_logits': CTC output (batch, time, num_phonemes)
-            - 'log_probs': Log probabilities for CTC (batch, time, num_phonemes)
-            - 'states': DREAM states (if return_states=True)
+            - Stage 1 (pretrain): 'recon', 'recon_loss'
+            - Stage 2 (adaptation): 'ctc_logits', 'log_probs'
+            - Both: 'states' (if return_states=True)
         """
         batch_size, time_steps, _ = x.shape
         device = x.device
@@ -134,16 +184,29 @@ class SandayASR(nn.Module):
         # Concatenate outputs
         hidden = torch.cat(all_outputs, dim=1)  # (batch, time, hidden_dim)
         
-        # CTC projection
-        ctc_logits = self.ctc_head(hidden)
+        outputs = {}
         
-        # Log probabilities for CTC
-        log_probs = torch.log_softmax(ctc_logits, dim=-1)
+        # Stage 1: Reconstruction
+        if stage == 'pretrain' or self.is_pretraining():
+            if hasattr(self, 'reconstruction_head'):
+                recon = self.reconstruction_head(hidden)
+            else:
+                recon = self.dream_stack.output_projection(hidden)
+            
+            recon_loss = nn.functional.mse_loss(recon, x)
+            
+            outputs['recon'] = recon
+            outputs['recon_loss'] = recon_loss
+            outputs['hidden'] = hidden
         
-        outputs = {
-            'ctc_logits': ctc_logits,
-            'log_probs': log_probs,
-        }
+        # Stage 2: CTC
+        else:
+            ctc_logits = self.ctc_head(hidden)
+            log_probs = torch.log_softmax(ctc_logits, dim=-1)
+            
+            outputs['ctc_logits'] = ctc_logits
+            outputs['log_probs'] = log_probs
+            outputs['hidden'] = hidden
         
         if return_states:
             outputs['states'] = states
