@@ -288,7 +288,7 @@ def run_hierarchy_test(
     
     save_results = {
         'hierarchy': {
-            'num_layers': results['hierarchy']['num_layers'],
+            'num_layers': model.num_layers,
             'avg_taus': results['hierarchy']['avg_taus'],
             'tau_ratio': results['hierarchy']['tau_ratio'],
             'layer_metrics': results['hierarchy']['metrics'],
