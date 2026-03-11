@@ -1,214 +1,28 @@
+#!/usr/bin/env python3
 """
-DREAM Benchmark Runner.
+Legacy Benchmark Runner - Redirects to new dream.benchmarks module.
 
-Runs all benchmark tests and generates comparison report.
-
-Usage:
-    # Run all tests
-    uv run python tests/benchmarks/run_all.py
-
-    # Run specific test
-    uv run python tests/benchmarks/test_01_basic_asr.py
-    uv run python tests/benchmarks/test_02_speaker_adaptation.py
-    uv run python tests/benchmarks/test_03_noise_robustness.py
+For new usage, use:
+    uv run python -m dream.benchmarks.run_all_benchmarks
 """
 
+import sys
 import subprocess
-import json
 from pathlib import Path
-from datetime import datetime
 
-
-def run_test(test_file: str) -> bool:
-    """Run a single test file."""
-    print(f"\n{'='*70}")
-    print(f"RUNNING: {test_file}")
-    print('='*70)
-
-    result = subprocess.run(
-        ['uv', 'run', 'python', test_file],
-        capture_output=False,
-        text=False
-    )
-
-    return result.returncode == 0
-
-
-def generate_report(results_dir: Path) -> str:
-    """Generate markdown report from JSON results."""
-    report = []
-    report.append("# DREAM Benchmark Report")
-    report.append(f"\nGenerated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-
-    # Initialize data variables
-    asr_data = {}
-    adapt_data = {}
-    noise_data = {}
-
-    # Test 1: Basic ASR
-    asr_file = results_dir / 'results_basic_asr.json'
-    if asr_file.exists():
-        with open(asr_file) as f:
-            asr_data = json.load(f)
-
-        report.append("## Test 1: Basic ASR Reconstruction\n")
-        report.append("| Model | Initial Loss | Final Loss | Improvement | Passed |")
-        report.append("|-------|--------------|------------|-------------|--------|")
-
-        for model, data in asr_data.items():
-            m = data['metrics']
-            passed = '✅' if data['passed'] else '❌'
-            report.append(
-                f"| {model.upper()} | {m['initial_loss']:.4f} | {m['final_loss']:.4f} | "
-                f"{m['improvement_pct']:.1f}% | {passed} |"
-            )
-        report.append("")
-
-    # Test 2: Speaker Adaptation
-    adapt_file = results_dir / 'results_speaker_adaptation.json'
-    if adapt_file.exists():
-        with open(adapt_file) as f:
-            adapt_data = json.load(f)
-
-        report.append("## Test 2: Speaker Adaptation\n")
-        report.append("| Model | Baseline | Max Post | Adapt Steps | Passed |")
-        report.append("|-------|----------|----------|-------------|--------|")
-
-        for model, data in adapt_data.items():
-            m = data['metrics']
-            passed = '✅' if data['passed'] else '❌'
-            steps = str(m['adaptation_steps']) if m['adaptation_steps'] else "N/A"
-            report.append(
-                f"| {model.upper()} | {m['baseline_loss']:.4f} | {m['max_post_switch']:.4f} | "
-                f"{steps} | {passed} |"
-            )
-        report.append("")
-
-    # Test 3: Noise Robustness
-    noise_file = results_dir / 'results_noise_robustness.json'
-    if noise_file.exists():
-        with open(noise_file) as f:
-            noise_data = json.load(f)
-
-        report.append("## Test 3: Noise Robustness\n")
-        report.append("| Model | Clean Loss | 10dB Loss | Ratio | Surprise | Passed |")
-        report.append("|-------|------------|-----------|-------|----------|--------|")
-
-        for model, data in noise_data.items():
-            m = data['metrics']
-            passed = '✅' if data['passed'] else '❌'
-            surprise = '✅' if m.get('surprise_responds', False) else 'N/A'
-            report.append(
-                f"| {model.upper()} | {m['clean_loss']:.4f} | {m['noisy_loss_10db']:.4f} | "
-                f"{m['loss_ratio']:.2f}x | {surprise} | {passed} |"
-            )
-        report.append("")
-
-    # Summary
-    report.append("## Overall Summary\n")
-
-    # Count passes
-    all_passed = True
-    for data in [asr_data, adapt_data, noise_data]:
-        for model_data in data.values():
-            if not model_data['passed']:
-                all_passed = False
-
-    if all_passed:
-        report.append("### 🎉 All Tests Passed!")
-    else:
-        report.append("### ⚠️ Some Tests Failed")
-
-    report.append("\n### Key Findings\n")
-
-    # DREAM highlights
-    if 'dream' in asr_data:
-        dream_improvement = asr_data['dream']['metrics']['improvement_pct']
-        report.append(f"- **DREAM ASR Improvement**: {dream_improvement:.1f}%")
-
-    if 'dream' in adapt_data:
-        dream_steps = adapt_data['dream']['metrics']['adaptation_steps']
-        report.append(f"- **DREAM Speaker Adaptation**: {dream_steps} steps (spec: <50)")
-
-    if 'dream' in noise_data:
-        dream_responds = noise_data['dream']['metrics'].get('surprise_responds', False)
-        report.append(f"- **DREAM Noise Detection**: {'✅ Detects noise' if dream_responds else '❌ No detection'}")
-
-    report.append("\n---")
-    report.append("*Report generated by NNAI-S Benchmark Runner*")
-
-    return "\n".join(report)
-
-
-def main():
-    """Run all benchmarks and generate report."""
-    print("="*70)
-    print("DREAM BENCHMARK SUITE")
-    print("="*70)
-    print("\nRunning all benchmark tests...")
-    print("Note: This may take 10-30 minutes depending on hardware")
-
-    benchmarks_dir = Path(__file__).parent
-    results_dir = benchmarks_dir / 'results'
-    results_dir.mkdir(parents=True, exist_ok=True)
-
-    tests = [
-        str(benchmarks_dir / 'test_01_basic_asr.py'),
-        str(benchmarks_dir / 'test_02_speaker_adaptation.py'),
-        str(benchmarks_dir / 'test_03_noise_robustness.py'),
-    ]
-
-    results = []
-    for test in tests:
-        success = run_test(test)
-        results.append((test, success))
-
-        # Save results to results/ directory
-        test_name = Path(test).stem.replace('test_', '').replace('_', '-')
-        for ext in ['json']:
-            src = benchmarks_dir / f'results_{test_name}.{ext}'
-            if src.exists():
-                # Already in right place from test script
-                pass
-
-    # Generate visualizations
-    print("\n" + "="*70)
-    print("GENERATING VISUALIZATIONS")
-    print("="*70)
-
-    try:
-        from benchmarks.visualize import main as visualize_main
-        visualize_main()
-    except ImportError:
-        print("  ⚠ Visualization module not found. Skipping plots.")
-
-    # Generate text report
-    print("\n" + "="*70)
-    print("GENERATING REPORT")
-    print("="*70)
-
-    report = generate_report(results_dir)
-
-    # Save report
-    report_file = results_dir / 'BENCHMARK_REPORT.md'
-    with open(report_file, 'w') as f:
-        f.write(report)
-
-    print(f"\nReport saved to: {report_file}")
-    print("\n" + "="*70)
-    print("COMPLETE")
-    print("="*70)
-
-    # Print summary
-    print("\nTest Results:")
-    for test, success in results:
-        status = '✅' if success else '❌'
-        print(f"  {status} {Path(test).name}")
-
-    all_passed = all(s for _, s in results)
-    print(f"\nOverall: {'✅ ALL TESTS PASSED' if all_passed else '❌ SOME TESTS FAILED'}")
-    print(f"\nResults directory: {results_dir}")
-
-
+# Redirect to new benchmark runner
 if __name__ == '__main__':
-    main()
+    print("=" * 70)
+    print("DEPRECATED: This script is deprecated.")
+    print("Please use:")
+    print("  uv run python -m dream.benchmarks.run_all_benchmarks")
+    print("=" * 70)
+    
+    # Run new benchmark runner
+    cmd = [
+        sys.executable,
+        "-m",
+        "dream.benchmarks.run_all_benchmarks"
+    ] + sys.argv[1:]
+    
+    subprocess.run(cmd, cwd=Path(__file__).parent.parent.parent)
