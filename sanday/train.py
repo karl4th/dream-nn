@@ -114,12 +114,25 @@ class SandayTrainer:
             eps=1e-9,
         )
         
-        # Learning rate scheduler
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        # Learning rate scheduler with warmup
+        self.warmup_epochs = 5
+        self.scheduler = torch.optim.lr_scheduler.SequentialLR(
             self.optimizer,
-            mode='min',
-            factor=0.5,
-            patience=5,
+            schedulers=[
+                torch.optim.lr_scheduler.LinearLR(
+                    self.optimizer,
+                    start_factor=0.1,
+                    end_factor=1.0,
+                    total_iters=self.warmup_epochs,
+                ),
+                torch.optim.lr_scheduler.ReduceLROnPlateau(
+                    self.optimizer,
+                    mode='min',
+                    factor=0.5,
+                    patience=5,
+                ),
+            ],
+            milestones=[self.warmup_epochs],
         )
         
         # Training history
@@ -492,10 +505,12 @@ def main():
                        help='Number of training epochs')
     parser.add_argument('--batch-size', type=int, default=8,
                        help='Batch size')
-    parser.add_argument('--lr', type=float, default=0.001,
-                       help='Learning rate')
-    parser.add_argument('--grad-clip', type=float, default=5.0,
-                       help='Gradient clipping')
+    parser.add_argument('--lr', type=float, default=0.0001,  # Changed from 0.001 to 0.0001
+                       help='Learning rate (start with 1e-4 for CTC stability)')
+    parser.add_argument('--grad-clip', type=float, default=1.0,  # Changed from 5.0 to 1.0
+                       help='Gradient clipping (lower for stability)')
+    parser.add_argument('--warmup-epochs', type=int, default=5,
+                       help='Epochs with reduced learning rate (warmup)')
     parser.add_argument('--num-workers', type=int, default=0,  # Changed from 4 to 0 (no workers = more stable)
                        help='Number of data loading workers (0 = main process only)')
     
