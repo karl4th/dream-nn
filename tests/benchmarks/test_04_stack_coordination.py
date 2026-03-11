@@ -110,25 +110,47 @@ def train_stack(
     return history
 
 
+def load_audio_files_from_metadata(metadata_path: str, audio_dir: str):
+    """Load audio files from LJSpeech metadata."""
+    import pandas as pd
+    import librosa
+    import torch
+
+    df = pd.read_csv(metadata_path, sep='|', header=None, names=['id', 'text', 'phonemes'])
+    features = []
+
+    for _, row in df.iterrows():
+        audio_file = Path(audio_dir) / f"{row['id']}.wav"
+        if audio_file.exists():
+            y, sr = librosa.load(str(audio_file), sr=16000)
+            melspec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=80)
+            log_mels = librosa.power_to_db(melspec, ref=np.max)
+            feat = torch.tensor(log_mels.T, dtype=torch.float32)
+            feat = (feat - feat.mean()) / (feat.std() + 1e-6)
+            features.append(feat)
+
+    return features
+
+
 def run_coordination_test(
     audio_dir: str = 'audio_test',
+    metadata_path: str = None,
     hidden_dims: list = [128, 128, 128],
     n_epochs: int = 50,
     device: str = 'cpu'
 ) -> dict:
-    """
-    Run coordination benchmark.
-
-    Compares coordinated vs uncoordinated DREAMStack.
-    """
+    """Run coordination benchmark."""
     print("=" * 70)
     print("DREAM Benchmark Test 4: Stack Coordination")
     print("=" * 70)
 
     # Load data
     print("\nLoading audio files...")
-    features, names = load_audio_files(audio_dir)
-    train_data = pad_sequences(features[:9])
+    if metadata_path:
+        features = load_audio_files_from_metadata(metadata_path, audio_dir)
+    else:
+        features, names = load_audio_files(audio_dir)
+    train_data = pad_sequences(features[:9]) if len(features) > 9 else pad_sequences(features)
     print(f"Training data: {train_data.shape}")
 
     results = {}

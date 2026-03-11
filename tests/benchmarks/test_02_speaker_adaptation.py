@@ -20,6 +20,8 @@ import numpy as np
 from pathlib import Path
 from typing import Optional, List
 import json
+import pandas as pd
+import librosa
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -115,14 +117,33 @@ def test_speaker_adaptation(
     }
 
 
+def load_audio_files_from_metadata(metadata_path: str, audio_dir: str):
+    """Load audio files from LJSpeech metadata."""
+    df = pd.read_csv(metadata_path, sep='|', header=None, names=['id', 'text', 'phonemes'])
+    features = []
+    names = []
+
+    for _, row in df.iterrows():
+        audio_file = Path(audio_dir) / f"{row['id']}.wav"
+        if audio_file.exists():
+            y, sr = librosa.load(str(audio_file), sr=16000)
+            melspec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=80)
+            log_mels = librosa.power_to_db(melspec, ref=np.max)
+            feat = torch.tensor(log_mels.T, dtype=torch.float32)
+            feat = (feat - feat.mean()) / (feat.std() + 1e-6)
+            features.append(feat)
+            names.append(row['id'])
+
+    return features, names
+
+
 def run_speaker_adaptation_test(
     audio_dir: str = 'audio_test',
+    metadata_path: str = None,
     hidden_dim: int = 256,
     device: Optional[str] = None
 ) -> dict:
-    """
-    Run speaker adaptation test for all models.
-    """
+    """Run speaker adaptation test."""
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -132,10 +153,13 @@ def run_speaker_adaptation_test(
 
     # Load data
     print("\nLoading audio files...")
-    features, names = load_audio_files(audio_dir)
-    print(f"Loaded {len(features)} files: {names[:3]}...")
+    if metadata_path:
+        features, names = load_audio_files_from_metadata(metadata_path, audio_dir)
+    else:
+        features, names = load_audio_files(audio_dir)
+    print(f"Loaded {len(features)} files")
 
-    train_data = pad_sequences(features[:9])
+    train_data = pad_sequences(features[:9]) if len(features) > 9 else pad_sequences(features)
     print(f"Training data: {train_data.shape}")
 
     results = {}

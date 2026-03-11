@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import time
+import pandas as pd
 from pathlib import Path
 from typing import Optional
 import json
@@ -108,17 +109,38 @@ def train_model(
     return history
 
 
+def load_audio_files_from_metadata(metadata_path: str, audio_dir: str):
+    """Load audio files from LJSpeech metadata."""
+    import librosa
+    import torch
+
+    df = pd.read_csv(metadata_path, sep='|', header=None, names=['id', 'text', 'phonemes'])
+    
+    features = []
+    names = []
+
+    for _, row in df.iterrows():
+        audio_file = Path(audio_dir) / f"{row['id']}.wav"
+        if audio_file.exists():
+            y, sr = librosa.load(str(audio_file), sr=16000)
+            melspec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=80)
+            log_mels = librosa.power_to_db(melspec, ref=np.max)
+            feat = torch.tensor(log_mels.T, dtype=torch.float32)
+            feat = (feat - feat.mean()) / (feat.std() + 1e-6)
+            features.append(feat)
+            names.append(row['id'])
+
+    return features, names
+
+
 def run_basic_asr_test(
     audio_dir: str = 'audio_test',
+    metadata_path: str = None,
     hidden_dim: int = 256,
     n_epochs: int = 100,
     device: Optional[str] = None
 ) -> dict:
-    """
-    Run basic ASR reconstruction test for all models.
-
-    Compares DREAM, LSTM, and Transformer on reconstruction quality.
-    """
+    """Run basic ASR reconstruction test."""
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -128,10 +150,13 @@ def run_basic_asr_test(
 
     # Load data
     print("\nLoading audio files...")
-    features, names = load_audio_files(audio_dir)
+    if metadata_path:
+        features, names = load_audio_files_from_metadata(metadata_path, audio_dir)
+    else:
+        features, names = load_audio_files(audio_dir)
     print(f"Loaded {len(features)} files")
 
-    train_data = pad_sequences(features[:9])  # Use 9 files for training
+    train_data = pad_sequences(features[:9]) if len(features) > 9 else pad_sequences(features)
     print(f"Training data: {train_data.shape}")
 
     results = {}
