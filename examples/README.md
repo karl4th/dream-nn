@@ -141,6 +141,7 @@ python examples/train.py \
 | `--log-dir` | ./logs | Directory for logs/checkpoints |
 | `--run-name` | auto | Name for this run |
 | `--log-interval` | 10 | Log every N batches |
+| `--example-interval` | 5 | Show prediction examples every N epochs |
 
 ### Reproducibility
 

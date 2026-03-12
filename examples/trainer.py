@@ -224,15 +224,28 @@ class ASRTrainer:
     @torch.no_grad()
     def validate(
         self,
-        val_loader: DataLoader
-    ) -> Dict[str, float]:
+        val_loader: DataLoader,
+        return_examples: bool = False,
+        num_examples: int = 5
+    ) -> Dict:
         """
         Validate on validation set.
+        
+        Parameters
+        ----------
+        val_loader : DataLoader
+            Validation data loader
+        return_examples : bool
+            Return prediction examples (text)
+        num_examples : int
+            Number of examples to return
         
         Returns
         -------
         metrics : dict
             Validation metrics
+        examples : list, optional
+            List of (true_text, predicted_text) tuples
         """
         self.model.eval()
         
@@ -241,7 +254,9 @@ class ASRTrainer:
         total_aux_loss = 0.0
         num_batches = 0
         
-        for mel_spec, tokens, mel_lengths, token_lengths in val_loader:
+        examples = []
+        
+        for batch_idx, (mel_spec, tokens, mel_lengths, token_lengths) in enumerate(val_loader):
             mel_spec = mel_spec.to(self.device)
             tokens = tokens.to(self.device)
             mel_lengths = mel_lengths.to(self.device)
@@ -278,6 +293,11 @@ class ASRTrainer:
             total_ctc_loss += ctc_loss.item()
             total_aux_loss += aux_loss_val
             num_batches += 1
+            
+            # Decode examples
+            if return_examples and len(examples) < num_examples:
+                batch_examples = self._decode_batch(log_probs, tokens, out_lengths, token_lengths)
+                examples.extend(batch_examples[:num_examples - len(examples)])
         
         # Average metrics
         metrics = {
@@ -286,14 +306,111 @@ class ASRTrainer:
             'aux_loss': total_aux_loss / num_batches
         }
         
+        if return_examples:
+            return metrics, examples[:num_examples]
+        
         return metrics
+    
+    def _decode_batch(
+        self,
+        log_probs: torch.Tensor,
+        true_tokens: torch.Tensor,
+        out_lengths: torch.Tensor,
+        token_lengths: torch.Tensor,
+        blank_id: int = 0
+    ) -> list:
+        """
+        Decode CTC predictions to text.
+        
+        Parameters
+        ----------
+        log_probs : torch.Tensor
+            Log probabilities (batch, time, num_classes)
+        true_tokens : torch.Tensor
+            True token IDs (batch, text_length)
+        out_lengths : torch.Tensor
+            Output lengths
+        token_lengths : torch.Tensor
+            True token lengths
+        blank_id : int
+            CTC blank token ID
+        
+        Returns
+        -------
+        examples : list
+            List of (true_text, predicted_text, confidence) tuples
+        """
+        # Get vocabulary from model or dataset
+        if hasattr(self.model, 'num_classes'):
+            num_classes = self.model.num_classes
+        else:
+            num_classes = 27
+        
+        # Simple character vocabulary
+        chars = " abcdefghijklmnopqrstuvwxyz"
+        idx_to_char = {i: ch for i, ch in enumerate(chars)}
+        
+        examples = []
+        batch_size = log_probs.shape[0]
+        
+        for i in range(min(batch_size, 5)):
+            # Get predictions for this sample
+            probs = log_probs[i, :out_lengths[i], :]  # (time, num_classes)
+            
+            # Greedy decoding: take argmax at each timestep
+            pred_ids = probs.argmax(dim=-1).cpu().tolist()
+            
+            # CTC decoding: remove blanks and repeated characters
+            pred_text = self._ctc_decode(pred_ids, idx_to_char, blank_id)
+            
+            # Get true text
+            true_ids = true_tokens[i, :token_lengths[i]].cpu().tolist()
+            true_text = ''.join(idx_to_char.get(id, '?') for id in true_ids)
+            
+            # Compute confidence (average probability of predicted tokens)
+            confidences = probs.max(dim=-1).values
+            confidence = confidences.mean().item()
+            
+            examples.append((true_text, pred_text, confidence))
+        
+        return examples
+    
+    def _ctc_decode(self, pred_ids: list, idx_to_char: dict, blank_id: int = 0) -> str:
+        """
+        Decode CTC output (remove blanks and repeated characters).
+        
+        Parameters
+        ----------
+        pred_ids : list
+            Predicted token IDs
+        idx_to_char : dict
+            ID to character mapping
+        blank_id : int
+            CTC blank token ID
+        
+        Returns
+        -------
+        text : str
+            Decoded text
+        """
+        result = []
+        prev_id = -1
+        
+        for id_ in pred_ids:
+            # Skip blanks and repeated characters
+            if id_ != prev_id and id_ != blank_id:
+                result.append(idx_to_char.get(id_, '?'))
+            prev_id = id_
+        
+        return ''.join(result)
     
     def train(
         self,
         train_loader: DataLoader,
         val_loader: DataLoader,
         num_epochs: int,
-        run_name: Optional[str] = None
+        run_name: Optional[str] = None,
+        example_interval: int = 5
     ):
         """
         Full training loop.
@@ -308,6 +425,8 @@ class ASRTrainer:
             Number of epochs to train
         run_name : str, optional
             Name for this run (for logging)
+        example_interval : int
+            Show prediction examples every N epochs (default: 5)
         """
         if run_name is None:
             run_name = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -325,6 +444,7 @@ class ASRTrainer:
         print(f"AMP: {self.use_amp}")
         print(f"Train batches: {len(train_loader)}")
         print(f"Val batches: {len(val_loader)}")
+        print(f"Example interval: every {example_interval} epochs")
         print(f"{'='*60}\n")
         
         for epoch in range(num_epochs):
@@ -335,7 +455,12 @@ class ASRTrainer:
             train_metrics = self.train_epoch(train_loader, epoch)
             
             # Validate
-            val_metrics = self.validate(val_loader)
+            show_examples = ((epoch + 1) % example_interval == 0) or (epoch + 1 == num_epochs)
+            
+            if show_examples:
+                val_metrics, examples = self.validate(val_loader, return_examples=True)
+            else:
+                val_metrics = self.validate(val_loader, return_examples=False)
             
             # Update scheduler
             current_lr = self.optimizer.param_groups[0]['lr']
@@ -359,6 +484,26 @@ class ASRTrainer:
                   f"CTC: {val_metrics['ctc_loss']:.4f} | "
                   f"Aux: {val_metrics['aux_loss']:.4f}")
             print(f"LR: {current_lr:.2e}")
+            
+            # Print examples
+            if show_examples and examples:
+                print(f"\n{'='*60}")
+                print(f"Prediction Examples (Epoch {epoch+1}):")
+                print(f"{'='*60}")
+                
+                for i, (true_text, pred_text, confidence) in enumerate(examples, 1):
+                    # Clean up text for display
+                    true_display = true_text.replace('\n', '\\n')[:60]
+                    pred_display = pred_text.replace('\n', '\\n')[:60]
+                    
+                    # Color coding based on match
+                    match = "✓" if true_text.strip() == pred_text.strip() else "✗"
+                    
+                    print(f"\n  {match} Example {i} (conf: {confidence:.2f}):")
+                    print(f"    True:  '{true_display}'")
+                    print(f"    Pred:  '{pred_display}'")
+                
+                print(f"\n{'='*60}")
             
             # Save best model
             if val_metrics['loss'] < self.best_val_loss:

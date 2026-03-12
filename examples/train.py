@@ -129,6 +129,8 @@ def parse_args():
                         help="Name for this run (default: auto-generated)")
     parser.add_argument("--log-interval", type=int, default=10,
                         help="Log every N batches (default: 10)")
+    parser.add_argument("--example-interval", type=int, default=5,
+                        help="Show prediction examples every N epochs (default: 5)")
     
     # =====================================================================
     # Reproducibility
@@ -236,7 +238,8 @@ def main():
         train_loader=train_loader,
         val_loader=val_loader,
         num_epochs=args.epochs,
-        run_name=args.run_name
+        run_name=args.run_name,
+        example_interval=args.example_interval
     )
     
     # Save final model
