@@ -72,8 +72,7 @@ class ASRTrainer:
             self.optimizer,
             mode='min',
             factor=0.5,
-            patience=3,
-            verbose=True
+            patience=3
         )
         
         # Mixed precision scaler
