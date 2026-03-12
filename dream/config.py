@@ -125,14 +125,14 @@ class DREAMConfig:
     # =====================================================================
     # Surprise Parameters
     # =====================================================================
-    base_threshold: float = 0.3
-    """Base surprise threshold (τ₀)"""
+    base_threshold: float = 2.0
+    """Base surprise threshold (τ_base) - z-score at S=0.5"""
 
     entropy_influence: float = 0.1
-    """Entropy influence on threshold (α)"""
+    """Entropy influence on threshold (α) - reserved"""
 
-    surprise_temperature: float = 0.05
-    """Surprise temperature (γ)"""
+    surprise_temperature: float = 1.0
+    """Surprise temperature (γ) - sigmoid steepness"""
 
     kappa: float = 0.5
     """Gain modulation coefficient"""
@@ -164,8 +164,14 @@ class DREAMConfig:
     # =====================================================================
     # Sleep Parameters
     # =====================================================================
-    sleep_rate: float = 0.005
-    """Sleep consolidation rate"""
+    sleep_rate: float = 0.1
+    """Sleep consolidation rate (ζ)"""
 
-    min_surprise_for_sleep: float = 0.2
-    """Minimum surprise for sleep activation"""
+    min_surprise_for_sleep: float = 0.5
+    """Minimum surprise for sleep activation (S_min)"""
+
+    min_steps_for_sleep: int = 100
+    """Minimum steps between sleep cycles (T_sleep)"""
+
+    error_threshold_for_sleep: float = 5.0
+    """Error threshold for degradation-triggered sleep"""

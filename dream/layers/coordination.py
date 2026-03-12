@@ -227,8 +227,8 @@ class CoordinatedDREAMCell(nn.Module):
         # ================================================================
         # 2. Surprise Gate WITH top-down modulation
         # ================================================================
-        surprise, error_norm, gain = self.surprise_gate(
-            error, state.error_var, state.error_mean
+        surprise, error_norm, gain, state.surprise_mu, state.surprise_sigma = self.surprise_gate(
+            error, state.error_var, state.error_mean, state.surprise_mu, state.surprise_sigma
         )
 
         # Apply modulation to surprise (makes layer more sensitive)
@@ -282,7 +282,9 @@ class CoordinatedDREAMCell(nn.Module):
         # 7. Sleep Consolidation
         # ================================================================
         if self.use_sleep:
-            state.U_target = self.sleep(state.U, state.U_target, state.avg_surprise)
+            state.U_target, sleep_triggered = self.sleep(
+                state.U, state.U_target, state.avg_surprise, state.error_mean
+            )
 
         # ================================================================
         # 8. Generate Prediction & Modulation

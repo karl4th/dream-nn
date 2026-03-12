@@ -9,39 +9,47 @@ from typing import Optional
 class DREAMState:
     """
     State container for DREAM cell.
-    
+
     Contains all state variables that need to be tracked across time steps
     for proper RNN operation with batch support.
-    
+
     Attributes
     ----------
     h : torch.Tensor
         Hidden state of shape (batch, hidden_dim)
-        
+
     U : torch.Tensor
         Fast weights (left factor) of shape (hidden_dim, rank)
         Updated via Hebbian learning with surprise modulation.
-        
+
     U_target : torch.Tensor
         Target fast weights for sleep consolidation.
         Shape: (hidden_dim, rank)
-        
+
     adaptive_tau : torch.Tensor
         Adaptive surprise threshold (habituation).
         Shape: (batch,) or scalar
-        
+
     error_mean : torch.Tensor
         Exponential moving average of prediction error.
         Shape: (batch, input_dim)
-        
+
     error_var : torch.Tensor
         Exponential moving variance of prediction error.
         Shape: (batch, input_dim)
-        
+
     avg_surprise : torch.Tensor
         Exponential moving average of surprise.
         Shape: (batch,) or scalar
-        
+
+    surprise_mu : torch.Tensor
+        Running mean of error norm for surprise computation.
+        Shape: (batch,) or scalar
+
+    surprise_sigma : torch.Tensor
+        Running std of error norm for surprise computation.
+        Shape: (batch,) or scalar
+
     Examples
     --------
     >>> from dream import DREAMConfig, DREAMCell, DREAMState
@@ -50,27 +58,33 @@ class DREAMState:
     >>> state = cell.init_state(batch_size=32)
     >>> h_new, state_new = cell(x, state)
     """
-    
+
     h: torch.Tensor
     """Hidden state: (batch, hidden_dim)"""
-    
+
     U: torch.Tensor
     """Fast weights (left factor): (batch, hidden_dim, rank)"""
-    
+
     U_target: torch.Tensor
     """Target fast weights: (batch, hidden_dim, rank)"""
-    
+
     adaptive_tau: torch.Tensor
     """Adaptive surprise threshold: (batch,) or scalar"""
-    
+
     error_mean: torch.Tensor
     """Error mean: (batch, input_dim)"""
-    
+
     error_var: torch.Tensor
     """Error variance: (batch, input_dim)"""
-    
+
     avg_surprise: torch.Tensor
     """Average surprise: (batch,) or scalar"""
+
+    surprise_mu: torch.Tensor
+    """Running mean of error norm for surprise: (batch,) or scalar"""
+
+    surprise_sigma: torch.Tensor
+    """Running std of error norm for surprise: (batch,) or scalar"""
     
     @classmethod
     def init_from_config(
@@ -82,7 +96,7 @@ class DREAMState:
     ) -> "DREAMState":
         """
         Initialize state from configuration.
-        
+
         Parameters
         ----------
         config : DREAMConfig
@@ -93,7 +107,7 @@ class DREAMState:
             Device for tensors
         dtype : torch.dtype, optional
             Data type for tensors
-            
+
         Returns
         -------
         DREAMState
@@ -101,11 +115,17 @@ class DREAMState:
         """
         # Initialize h with small random values for stability
         h = torch.randn(batch_size, config.hidden_dim, device=device, dtype=dtype) * 0.01
-        
+
         # U is per-batch for independent adaptation
         U = torch.zeros(batch_size, config.hidden_dim, config.rank, device=device, dtype=dtype)
         U_target = torch.zeros(batch_size, config.hidden_dim, config.rank, device=device, dtype=dtype)
-        
+
+        # Initialize surprise statistics
+        # mu starts at 1.0 (expected error norm), sigma starts at 0.1 (small uncertainty)
+        surprise_shape = (batch_size,) if batch_size > 1 else ()
+        surprise_mu = torch.ones(surprise_shape, device=device, dtype=dtype)
+        surprise_sigma = torch.full(surprise_shape, 0.1, device=device, dtype=dtype)
+
         return cls(
             h=h,
             U=U,
@@ -123,12 +143,14 @@ class DREAMState:
                 device=device,
                 dtype=dtype
             ),
+            surprise_mu=surprise_mu,
+            surprise_sigma=surprise_sigma,
         )
     
     def detach(self) -> "DREAMState":
         """
         Detach all tensors from computation graph.
-        
+
         Returns
         -------
         DREAMState
@@ -142,4 +164,6 @@ class DREAMState:
             error_mean=self.error_mean.detach(),
             error_var=self.error_var.detach(),
             avg_surprise=self.avg_surprise.detach(),
+            surprise_mu=self.surprise_mu.detach(),
+            surprise_sigma=self.surprise_sigma.detach(),
         )
